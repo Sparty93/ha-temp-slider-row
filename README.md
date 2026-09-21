@@ -45,7 +45,7 @@ entities:
 | `show_value` | `true` | Show the value to the right of the track |
 | `unit` | `"°"` | Suffix for the value label |
 | `color` | auto | Fixed fill colour. Omit to follow the entity's mode. |
-| `profile` | auto | `radiator`, `zone`, `thermostat` or `plain` — picks the colour rules |
+| `profile` | auto | `master`, `radiator`, `zone`, `thermostat` or `plain` — picks the colour rules |
 | `heating_master` | – | Boolean that gates radiators (greys the fill when off) |
 | `ac_master` | – | Climate entity that overrides radiators (greys the fill when not off) |
 | `height` | `18` | Track thickness in px |
@@ -57,6 +57,7 @@ the same row so the two can never disagree:
 
 | Profile | Rules |
 |---|---|
+| `master` | Drives both systems. AC on → the AC's colour; else heating master on → orange; else grey. |
 | `radiator` | AC master on, heating master off, or room off → grey. `hvac_action: heating` → orange. Idle → neutral. |
 | `zone` | cooling → blue, heating → deep orange, fan/drying → cyan, otherwise grey |
 | `thermostat` | off → grey, cooling → blue, heating → deep orange, otherwise neutral |

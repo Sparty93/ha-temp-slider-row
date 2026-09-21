@@ -19,7 +19,7 @@
  */
 
 const GRAB_PX = 24;      // touch-friendly grab radius around the thumb
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 
 class TempSliderRow extends HTMLElement {
   constructor() {
@@ -192,42 +192,65 @@ class TempSliderRow extends HTMLElement {
   }
 
   _modeColor() {
-    if (this._config.color) return this._config.color;
-    const DIS = "var(--disabled-text-color)";
-    const SEC = "var(--secondary-text-color)";
+    const DIS    = "var(--disabled-text-color)";
+    const SEC    = "var(--secondary-text-color)";
     const ORANGE = "var(--orange-color, #ff9800)";
     const DEEP   = "var(--deep-orange-color, #ff5722)";
     const BLUE   = "var(--blue-color, #2196f3)";
     const CYAN   = "var(--cyan-color, #00bcd4)";
     const s = this._stateObj;
     if (!s) return DIS;
-    const act = s.attributes && s.attributes.hvac_action;
     const prof = this._profile();
+    const acS   = this._config.ac_master ? this._hass.states[this._config.ac_master] : null;
+    const heatS = this._config.heating_master ? this._hass.states[this._config.heating_master] : null;
 
-    if (prof === "plain") return "var(--primary-color, #03a9f4)";
+    // colour of a climate entity: what it is DOING, falling back to what it is SET to
+    const climColor = (st) => {
+      const a = st.attributes && st.attributes.hvac_action;
+      if (a === "cooling") return BLUE;
+      if (a === "heating") return DEEP;
+      if (a === "fan" || a === "drying") return CYAN;
+      const m = st.state;
+      if (m === "cool") return BLUE;
+      if (m === "heat") return DEEP;
+      if (m === "fan_only" || m === "dry") return CYAN;
+      return SEC;
+    };
+
+    /**
+     * 'master' drives BOTH systems - the radiators via the push automation and the AC
+     * zones via the comfort sync - so it is not a heating control that the AC disables.
+     * It shows whichever system is actually live, and greys only when neither is.
+     */
+    if (prof === "master") {
+      if (acS && acS.state !== "off") return climColor(acS);       // AC has priority
+      if (heatS && heatS.state === "on") return this._config.color || ORANGE;
+      return DIS;                                                   // nothing is running
+    }
+
+    // every other profile: the masters gate it first
+    if (acS && acS.state !== "off") return DIS;       // AC overrides the boiler
+    if (heatS && heatS.state !== "on") return DIS;    // heating master off
+
+    if (prof === "plain") return this._config.color || "var(--primary-color, #03a9f4)";
 
     if (prof === "radiator") {
-      const ac = this._config.ac_master ? this._hass.states[this._config.ac_master] : null;
-      const heat = this._config.heating_master ? this._hass.states[this._config.heating_master] : null;
-      if (ac && ac.state !== "off") return DIS;          // AC always overrides the boiler
-      if (heat && heat.state !== "on") return DIS;       // heating master off
-      if (s.state === "off") return DIS;                 // room off
-      if (act === "heating") return ORANGE;
-      return SEC;                                        // idle = neutral
+      if (s.state === "off") return DIS;
+      if (s.attributes && s.attributes.hvac_action === "heating") return this._config.color || ORANGE;
+      return SEC;
     }
 
     if (prof === "zone") {
-      if (act === "cooling") return BLUE;
-      if (act === "heating") return DEEP;
-      if (act === "fan" || act === "drying") return CYAN;
+      const a = s.attributes && s.attributes.hvac_action;
+      if (a === "cooling") return BLUE;
+      if (a === "heating") return DEEP;
+      if (a === "fan" || a === "drying") return CYAN;
       return DIS;
     }
 
     // thermostat (Sensibo etc.)
     if (s.state === "off") return DIS;
-    if (act === "cooling") return BLUE;
-    if (act === "heating") return DEEP;
-    return SEC;
+    return climColor(s);
   }
 
   // ---------- rendering ----------
