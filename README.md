@@ -74,6 +74,9 @@ rows look exactly as they did. A deliberate tap on the value opens that helper's
 the tap is gated on movement (<6px) and duration (<600ms) so a scroll starting on the label never
 opens a dialog.
 
+It is coloured by **sign**, not by the room's mode — orange for a positive (warmer) offset, blue for a
+negative (cooler) one — while the value itself stays the normal text colour.
+
 The card only *displays* the offset — applying it is up to your automations.
 
 ## Supported domains

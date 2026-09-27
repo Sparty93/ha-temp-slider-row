@@ -19,7 +19,7 @@
  */
 
 const GRAB_PX = 24;      // touch-friendly grab radius around the thumb
-const VERSION = "1.1.0";
+const VERSION = "1.1.1";
 
 class TempSliderRow extends HTMLElement {
   constructor() {
@@ -330,8 +330,11 @@ class TempSliderRow extends HTMLElement {
         .value sup.off {
           font-size: 0.68em; font-weight: 700; margin-left: 1px;
           vertical-align: super; line-height: 0;
-          color: var(--tsr-color);
         }
+        /* the offset means "warmer" or "cooler", so it is coloured by SIGN - not by the
+           room's mode. The value itself stays primary text colour. */
+        .value sup.off.pos { color: var(--orange-color, #ff9800); }
+        .value sup.off.neg { color: var(--blue-color, #2196f3); }
         .value.tappable { cursor: pointer; }
         .value {
           flex: 0 0 auto; min-width: 54px; text-align: right;
@@ -401,7 +404,7 @@ class TempSliderRow extends HTMLElement {
       const ov = os ? parseFloat(os.state) : NaN;
       if (isFinite(ov) && Math.abs(ov) >= 0.05) {
         const sup = document.createElement("sup");
-        sup.className = "off";
+        sup.className = "off " + (ov > 0 ? "pos" : "neg");
         const n = Math.abs(ov) % 1 === 0 ? Math.abs(ov).toFixed(0) : Math.abs(ov).toFixed(1);
         sup.textContent = (ov > 0 ? "+" : "\u2212") + n;
         this._label.appendChild(sup);
