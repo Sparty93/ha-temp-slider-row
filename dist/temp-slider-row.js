@@ -19,7 +19,7 @@
  */
 
 const GRAB_PX = 24;      // touch-friendly grab radius around the thumb
-const VERSION = "1.1.1";
+const VERSION = "1.1.2";
 
 class TempSliderRow extends HTMLElement {
   constructor() {
@@ -335,6 +335,7 @@ class TempSliderRow extends HTMLElement {
            room's mode. The value itself stays primary text colour. */
         .value sup.off.pos { color: var(--orange-color, #ff9800); }
         .value sup.off.neg { color: var(--blue-color, #2196f3); }
+        /* opacity carries magnitude: +/-0.5 faint, +/-5 full strength */
         .value.tappable { cursor: pointer; }
         .value {
           flex: 0 0 auto; min-width: 54px; text-align: right;
@@ -405,6 +406,8 @@ class TempSliderRow extends HTMLElement {
       if (isFinite(ov) && Math.abs(ov) >= 0.05) {
         const sup = document.createElement("sup");
         sup.className = "off " + (ov > 0 ? "pos" : "neg");
+        const mag = Math.min(1, Math.abs(ov) / 5);
+        sup.style.opacity = (0.55 + 0.45 * mag).toFixed(2);
         const n = Math.abs(ov) % 1 === 0 ? Math.abs(ov).toFixed(0) : Math.abs(ov).toFixed(1);
         sup.textContent = (ov > 0 ? "+" : "\u2212") + n;
         this._label.appendChild(sup);

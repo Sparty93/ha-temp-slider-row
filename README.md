@@ -75,7 +75,9 @@ the tap is gated on movement (<6px) and duration (<600ms) so a scroll starting o
 opens a dialog.
 
 It is coloured by **sign**, not by the room's mode — orange for a positive (warmer) offset, blue for a
-negative (cooler) one — while the value itself stays the normal text colour.
+negative (cooler) one — while the value itself stays the normal text colour. **Intensity carries
+magnitude**: opacity ramps from 0.55 at ±0.5° to 1.0 at ±5°. Opacity on a single hue rather than a
+shade ramp, because shading toward a darker colour reads well on a light theme and vanishes on a dark one.
 
 The card only *displays* the offset — applying it is up to your automations.
 
