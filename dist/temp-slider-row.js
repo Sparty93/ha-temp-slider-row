@@ -19,7 +19,7 @@
  */
 
 const GRAB_PX = 24;      // touch-friendly grab radius around the thumb
-const VERSION = "1.1.2";
+const VERSION = "1.2.0";
 
 class TempSliderRow extends HTMLElement {
   constructor() {
@@ -253,6 +253,60 @@ class TempSliderRow extends HTMLElement {
     return climColor(s);
   }
 
+  // ---------- offset popup ----------
+  get _offsetValue() {
+    const o = this._hass && this._hass.states[this._config.offset_entity];
+    const v = o ? parseFloat(o.state) : NaN;
+    return isFinite(v) ? v : 0;
+  }
+  _popBounds() {
+    const o = this._hass && this._hass.states[this._config.offset_entity];
+    const a = (o && o.attributes) || {};
+    return { min: Number(a.min !== undefined ? a.min : -5),
+             max: Number(a.max !== undefined ? a.max : 5),
+             step: Number(a.step !== undefined ? a.step : 0.5) || 0.5 };
+  }
+  _popXToValue(clientX) {
+    const r = this._popTrack.getBoundingClientRect();
+    const { min, max, step } = this._popBounds();
+    const frac = Math.min(1, Math.max(0, (clientX - r.left) / (r.width || 1)));
+    const snapped = Math.round((min + frac * (max - min)) / step) * step;
+    const dp = (String(step).split(".")[1] || "").length;
+    return Number(Math.min(max, Math.max(min, snapped)).toFixed(dp));
+  }
+  _openPop() {
+    this._popValue = this._offsetValue;
+    this._popName.textContent = this._config.name
+      || (this._stateObj && this._stateObj.attributes.friendly_name)
+      || this._config.entity;
+    this._backdrop.hidden = false;
+    this._paintPop();
+  }
+  _closePop() { this._backdrop.hidden = true; this._popDrag = false; }
+  _paintPop() {
+    const { min, max, step } = this._popBounds();
+    const v = this._popValue === undefined ? this._offsetValue : this._popValue;
+    const frac = (v - min) / ((max - min) || 1);
+    const zero = (0 - min) / ((max - min) || 1);
+    // fill runs from the zero mark out to the handle, so direction reads at a glance
+    const l = Math.min(frac, zero), r = Math.max(frac, zero);
+    this._popFill.style.left = (l * 100) + "%";
+    this._popFill.style.width = ((r - l) * 100) + "%";
+    this._popThumb.style.left = (frac * 100) + "%";
+    const dp = (String(step).split(".")[1] || "").length;
+    const sign = v > 0 ? "+" : (v < 0 ? "\u2212" : "");
+    this._popVal.textContent = sign + Math.abs(v).toFixed(dp) + "\u00b0";
+    const col = v > 0 ? "var(--orange-color, #ff9800)"
+              : v < 0 ? "var(--blue-color, #2196f3)"
+              : "var(--disabled-text-color)";
+    this._pop.style.setProperty("--pop-color", col);
+  }
+  _commitOffset(v) {
+    if (!this._config.offset_entity) return;
+    this._hass.callService("input_number", "set_value",
+      { entity_id: this._config.offset_entity, value: v });
+  }
+
   // ---------- rendering ----------
   _build() {
     if (this._built) return;
@@ -344,6 +398,53 @@ class TempSliderRow extends HTMLElement {
         }
         .root.dragging .value { color: var(--tsr-color); font-weight: 600; }
         .root.unavailable { opacity: .45; pointer-events: none; }
+        /* ---- offset popup ---- */
+        .backdrop {
+          position: fixed; inset: 0; z-index: 9998;
+          background: rgba(0,0,0,.45);
+          display: flex; align-items: center; justify-content: center;
+          padding: 16px;
+        }
+        .pop {
+          width: min(320px, 100%); box-sizing: border-box;
+          background: var(--card-background-color, #fff);
+          color: var(--primary-text-color);
+          border-radius: 18px; padding: 18px 18px 14px;
+          box-shadow: 0 8px 40px rgba(0,0,0,.4);
+        }
+        .pop-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+        .pop-name { font-size: 16px; font-weight: 600; }
+        .pop-sub { font-size: 12px; color: var(--secondary-text-color); }
+        .pop-row { display: flex; align-items: center; gap: 10px; }
+        .pop-end { font-size: 12px; color: var(--secondary-text-color); flex: 0 0 auto; width: 20px; }
+        .pop-end.r { text-align: right; }
+        .pop-track-wrap { position: relative; flex: 1 1 auto; display: flex; align-items: center; }
+        .pop-track {
+          position: relative; width: 100%; height: 18px; border-radius: 9px;
+          background: var(--tsr-track-bg, rgba(127,127,127,.22));
+          overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,.18);
+          /* a popup has nothing to scroll, so tapping the track IS allowed here */
+          cursor: pointer;
+        }
+        .pop-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px;
+                   background: var(--divider-color, rgba(127,127,127,.5)); }
+        .pop-fill { position: absolute; top: 0; bottom: 0; background: var(--pop-color); }
+        .pop-thumb {
+          position: absolute; top: 50%; width: 30px; height: 30px;
+          transform: translate(-50%, -50%);
+          display: flex; align-items: center; justify-content: center;
+          touch-action: none; background: transparent; cursor: grab;
+        }
+        .pop-grip { width: 6px; height: 26px; border-radius: 3px;
+                    background: var(--card-background-color, #fff);
+                    box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+        .pop-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+        .pop-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--pop-color); }
+        .pop-btn {
+          background: none; border: 0; padding: 6px 10px; border-radius: 8px;
+          color: var(--primary-color); font: inherit; font-size: 14px; cursor: pointer;
+        }
+        .pop-btn:active { background: rgba(127,127,127,.18); }
       </style>
       <div class="root">
         <div class="track-wrap">
@@ -352,6 +453,20 @@ class TempSliderRow extends HTMLElement {
           <div class="bubble"></div>
         </div>
         <div class="value"></div>
+      </div>
+      <div class="backdrop" hidden>
+        <div class="pop">
+          <div class="pop-head"><span class="pop-name"></span><span class="pop-sub">offset</span></div>
+          <div class="pop-row">
+            <span class="pop-end">−5</span>
+            <div class="pop-track-wrap">
+              <div class="pop-track"><div class="pop-mid"></div><div class="pop-fill"></div></div>
+              <div class="pop-thumb"><div class="pop-grip"></div></div>
+            </div>
+            <span class="pop-end r">+5</span>
+          </div>
+          <div class="pop-foot"><span class="pop-val"></span><button class="pop-btn">Reset to 0</button></div>
+        </div>
       </div>
     `;
     this._root  = this.shadowRoot.querySelector(".root");
@@ -374,11 +489,49 @@ class TempSliderRow extends HTMLElement {
       if (!this._config.offset_entity) return;
       const moved = Math.hypot(e.clientX - tx, e.clientY - ty);
       if (moved > 6 || Date.now() - tt > 600) return;
-      this.dispatchEvent(new CustomEvent("hass-more-info", {
-        bubbles: true, composed: true, detail: { entityId: this._config.offset_entity },
-      }));
+      this._openPop();
       e.stopPropagation();
     });
+    this._backdrop = this.shadowRoot.querySelector(".backdrop");
+    this._pop      = this.shadowRoot.querySelector(".pop");
+    this._popName  = this.shadowRoot.querySelector(".pop-name");
+    this._popTrack = this.shadowRoot.querySelector(".pop-track");
+    this._popFill  = this.shadowRoot.querySelector(".pop-fill");
+    this._popThumb = this.shadowRoot.querySelector(".pop-thumb");
+    this._popVal   = this.shadowRoot.querySelector(".pop-val");
+
+    this._backdrop.addEventListener("pointerdown", (e) => {
+      if (e.target === this._backdrop) this._closePop();
+    });
+    this.shadowRoot.querySelector(".pop-btn").addEventListener("click", () => {
+      this._popValue = 0; this._paintPop(); this._commitOffset(0);
+    });
+    const grab = (e) => {
+      this._popDrag = true;
+      this._popValue = this._popXToValue(e.clientX);   // tap anywhere jumps here: no scroll to protect
+      this._paintPop();
+      try { e.target.setPointerCapture(e.pointerId); } catch (_) {}
+      this._haptic("selection");
+      e.preventDefault(); e.stopPropagation();
+    };
+    const move = (e) => {
+      if (!this._popDrag) return;
+      const v = this._popXToValue(e.clientX);
+      if (v !== this._popValue) { this._popValue = v; this._haptic("selection"); this._paintPop(); }
+      e.preventDefault(); e.stopPropagation();
+    };
+    const drop = (e) => {
+      if (!this._popDrag) return;
+      this._popDrag = false;
+      try { e.target.releasePointerCapture(e.pointerId); } catch (_) {}
+      this._commitOffset(this._popValue);     // one service call, on release
+    };
+    for (const el of [this._popTrack, this._popThumb]) {
+      el.addEventListener("pointerdown", grab);
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", drop);
+      el.addEventListener("pointercancel", drop);
+    }
     this._built = true;
   }
 
@@ -419,6 +572,9 @@ class TempSliderRow extends HTMLElement {
     if (!this._config) return;
     this._build();
     if (this._config.height) this._root.style.setProperty("--tsr-height", this._config.height + "px");
+    if (this._backdrop && !this._backdrop.hidden && !this._popDrag) {
+      this._popValue = this._offsetValue; this._paintPop();
+    }
     this._paint();
   }
 }

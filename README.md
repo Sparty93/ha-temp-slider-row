@@ -67,10 +67,10 @@ the same row so the two can never disagree:
 Idle is deliberately neutral rather than the mode colour — an idle zone showing
 as "cooling" is misleading.
 
-## Offset superscript
+## Offset superscript and popup
 
 `offset_entity` displays a signed offset as a small raised number beside the value — `19.0°⁺²` — adding about 12px and no height at all. It is hidden entirely when the offset is zero, so untouched
-rows look exactly as they did. A deliberate tap on the value opens that helper's more-info dialog;
+rows look exactly as they did. A deliberate tap on the value opens a compact popup with its own slider;
 the tap is gated on movement (<6px) and duration (<600ms) so a scroll starting on the label never
 opens a dialog.
 
@@ -79,7 +79,12 @@ negative (cooler) one — while the value itself stays the normal text colour. *
 magnitude**: opacity ramps from 0.55 at ±0.5° to 1.0 at ±5°. Opacity on a single hue rather than a
 shade ramp, because shading toward a darker colour reads well on a light theme and vanishes on a dark one.
 
-The card only *displays* the offset — applying it is up to your automations.
+Tapping the value opens a small popup to set the offset: a centre-zero slider running −5 to +5 whose
+fill runs outward from the zero mark, a large signed readout, and a Reset to 0 button. Inside the popup
+**tapping the track jumps the handle there** — unlike the row slider, a popup has nothing to scroll, so
+the safer grab-the-thumb-only rule would just make it fiddly. One service call is sent on release.
+
+Applying the offset to the room is up to your automations; the card only sets the helper.
 
 ## Supported domains
 
