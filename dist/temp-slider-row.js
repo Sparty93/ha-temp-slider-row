@@ -19,7 +19,7 @@
  */
 
 const GRAB_PX = 24;      // touch-friendly grab radius around the thumb
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 
 class TempSliderRow extends HTMLElement {
   constructor() {
@@ -28,6 +28,7 @@ class TempSliderRow extends HTMLElement {
     this._dragging = false;
     this._dragValue = null;
     this._built = false;
+    this._escHandler = (e) => { if (e.key === "Escape") this._closePop(); };
   }
 
   setConfig(config) {
@@ -275,6 +276,7 @@ class TempSliderRow extends HTMLElement {
     return Number(Math.min(max, Math.max(min, snapped)).toFixed(dp));
   }
   _openPop() {
+    document.addEventListener("keydown", this._escHandler);
     this._popValue = this._offsetValue;
     this._popName.textContent = this._config.name
       || (this._stateObj && this._stateObj.attributes.friendly_name)
@@ -282,7 +284,13 @@ class TempSliderRow extends HTMLElement {
     this._backdrop.hidden = false;
     this._paintPop();
   }
-  _closePop() { this._backdrop.hidden = true; this._popDrag = false; }
+  _closePop() {
+    if (!this._backdrop) return;
+    this._backdrop.hidden = true;
+    this._popDrag = false;
+    if (this._escHandler) document.removeEventListener("keydown", this._escHandler);
+  }
+  disconnectedCallback() { this._closePop(); }
   _paintPop() {
     const { min, max, step } = this._popBounds();
     const v = this._popValue === undefined ? this._offsetValue : this._popValue;
@@ -399,6 +407,7 @@ class TempSliderRow extends HTMLElement {
         .root.dragging .value { color: var(--tsr-color); font-weight: 600; }
         .root.unavailable { opacity: .45; pointer-events: none; }
         /* ---- offset popup ---- */
+        .backdrop[hidden] { display: none !important; }
         .backdrop {
           position: fixed; inset: 0; z-index: 9998;
           background: rgba(0,0,0,.45);
@@ -412,7 +421,14 @@ class TempSliderRow extends HTMLElement {
           border-radius: 18px; padding: 18px 18px 14px;
           box-shadow: 0 8px 40px rgba(0,0,0,.4);
         }
-        .pop-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+        .pop-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+        .pop-head .pop-name { flex: 1 1 auto; }
+        .pop-x {
+          flex: 0 0 auto; background: none; border: 0; cursor: pointer;
+          font-size: 18px; line-height: 1; padding: 6px 8px; border-radius: 8px;
+          color: var(--secondary-text-color);
+        }
+        .pop-x:active { background: rgba(127,127,127,.18); }
         .pop-name { font-size: 16px; font-weight: 600; }
         .pop-sub { font-size: 12px; color: var(--secondary-text-color); }
         .pop-row { display: flex; align-items: center; gap: 10px; }
@@ -456,7 +472,11 @@ class TempSliderRow extends HTMLElement {
       </div>
       <div class="backdrop" hidden>
         <div class="pop">
-          <div class="pop-head"><span class="pop-name"></span><span class="pop-sub">offset</span></div>
+          <div class="pop-head">
+            <span class="pop-name"></span>
+            <span class="pop-sub">offset</span>
+            <button class="pop-x" aria-label="Close">\u2715</button>
+          </div>
           <div class="pop-row">
             <span class="pop-end">−5</span>
             <div class="pop-track-wrap">
@@ -502,6 +522,9 @@ class TempSliderRow extends HTMLElement {
 
     this._backdrop.addEventListener("pointerdown", (e) => {
       if (e.target === this._backdrop) this._closePop();
+    });
+    this.shadowRoot.querySelector(".pop-x").addEventListener("click", (e) => {
+      e.stopPropagation(); this._closePop();
     });
     this.shadowRoot.querySelector(".pop-btn").addEventListener("click", () => {
       this._popValue = 0; this._paintPop(); this._commitOffset(0);
