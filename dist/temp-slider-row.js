@@ -19,7 +19,7 @@
  */
 
 const GRAB_PX = 24;      // touch-friendly grab radius around the thumb
-const VERSION = "1.0.1";
+const VERSION = "1.1.0";
 
 class TempSliderRow extends HTMLElement {
   constructor() {
@@ -39,7 +39,7 @@ class TempSliderRow extends HTMLElement {
     this._config = {
       min: null, max: null, step: null,
       show_value: true, unit: "°", height: null,
-      profile: null, heating_master: null, ac_master: null,
+      profile: null, heating_master: null, ac_master: null, offset_entity: null,
       ...config,
     };
     this._build();
@@ -326,6 +326,13 @@ class TempSliderRow extends HTMLElement {
           border: 5px solid transparent; border-top-color: var(--tsr-color);
         }
         .root.dragging .bubble { opacity: 1; transform: translateX(-50%) scale(1); }
+        /* offset rides on the value as a small raised number - costs ~12px, never any height */
+        .value sup.off {
+          font-size: 0.68em; font-weight: 700; margin-left: 1px;
+          vertical-align: super; line-height: 0;
+          color: var(--tsr-color);
+        }
+        .value.tappable { cursor: pointer; }
         .value {
           flex: 0 0 auto; min-width: 54px; text-align: right;
           font-size: 15px; font-variant-numeric: tabular-nums;
@@ -354,6 +361,20 @@ class TempSliderRow extends HTMLElement {
     this._thumb.addEventListener("pointermove", (e) => this._onPointerMove(e));
     this._thumb.addEventListener("pointerup",   (e) => this._onPointerUp(e));
     this._thumb.addEventListener("pointercancel", (e) => this._onPointerUp(e));
+
+    // A deliberate TAP on the value opens the offset helper. Movement/duration gated so a
+    // scroll that happens to start on the label never opens a dialog.
+    let tx=0, ty=0, tt=0;
+    this._label.addEventListener("pointerdown", (e) => { tx=e.clientX; ty=e.clientY; tt=Date.now(); });
+    this._label.addEventListener("pointerup", (e) => {
+      if (!this._config.offset_entity) return;
+      const moved = Math.hypot(e.clientX - tx, e.clientY - ty);
+      if (moved > 6 || Date.now() - tt > 600) return;
+      this.dispatchEvent(new CustomEvent("hass-more-info", {
+        bubbles: true, composed: true, detail: { entityId: this._config.offset_entity },
+      }));
+      e.stopPropagation();
+    });
     this._built = true;
   }
 
@@ -373,6 +394,19 @@ class TempSliderRow extends HTMLElement {
     this._bubble.style.left = pct + "%";
     this._bubble.textContent = text;
     this._label.textContent = this._config.show_value ? text : "";
+    // offset superscript: shown only when non-zero, so untouched rooms look exactly as before
+    this._label.classList.toggle("tappable", !!this._config.offset_entity);
+    if (this._config.offset_entity) {
+      const os = this._hass && this._hass.states[this._config.offset_entity];
+      const ov = os ? parseFloat(os.state) : NaN;
+      if (isFinite(ov) && Math.abs(ov) >= 0.05) {
+        const sup = document.createElement("sup");
+        sup.className = "off";
+        const n = Math.abs(ov) % 1 === 0 ? Math.abs(ov).toFixed(0) : Math.abs(ov).toFixed(1);
+        sup.textContent = (ov > 0 ? "+" : "\u2212") + n;
+        this._label.appendChild(sup);
+      }
+    }
   }
 
   _render() {

@@ -49,6 +49,7 @@ entities:
 | `heating_master` | – | Boolean that gates radiators (greys the fill when off) |
 | `ac_master` | – | Climate entity that overrides radiators (greys the fill when not off) |
 | `height` | `18` | Track thickness in px |
+| `offset_entity` | – | An `input_number` whose value is shown as a superscript on the value, and opened on tap |
 
 ## Fill colour
 
@@ -65,6 +66,15 @@ the same row so the two can never disagree:
 
 Idle is deliberately neutral rather than the mode colour — an idle zone showing
 as "cooling" is misleading.
+
+## Offset superscript
+
+`offset_entity` displays a signed offset as a small raised number beside the value — `19.0°⁺²` — adding about 12px and no height at all. It is hidden entirely when the offset is zero, so untouched
+rows look exactly as they did. A deliberate tap on the value opens that helper's more-info dialog;
+the tap is gated on movement (<6px) and duration (<600ms) so a scroll starting on the label never
+opens a dialog.
+
+The card only *displays* the offset — applying it is up to your automations.
 
 ## Supported domains
 
