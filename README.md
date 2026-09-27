@@ -86,6 +86,19 @@ the safer grab-the-thumb-only rule would just make it fiddly. One service call i
 
 Applying the offset to the room is up to your automations; the card only sets the helper.
 
+## Staying in sync
+
+A row can depend on entities the parent card knows nothing about — `heating_master`, `ac_master`,
+`offset_entity`. The entities card only hands `hass` down when it decides to update, and it decides
+that from its own configured entities, so a change to one of those others left this element holding a
+stale immutable `hass` snapshot and painting a stale colour. Meanwhile a `template-entity-row` beside
+it stayed correct, because HA's `render_template` subscription tracks every entity a template touches.
+The visible result was an orange heating icon next to a grey slider.
+
+The card therefore subscribes to `state_changed` itself and keeps its own freshest copy of each entity
+it depends on, rather than relying on being told. If you extend it with new entity options, add them to
+`_deps()` and read them through `_st()`.
+
 ## Supported domains
 
 `climate` and `water_heater` set the target temperature; `input_number` and

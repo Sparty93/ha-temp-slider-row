@@ -19,7 +19,7 @@
  */
 
 const GRAB_PX = 24;      // touch-friendly grab radius around the thumb
-const VERSION = "1.2.1";
+const VERSION = "1.2.2";
 
 class TempSliderRow extends HTMLElement {
   constructor() {
@@ -51,12 +51,49 @@ class TempSliderRow extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    this._subscribe();
     this._render();
+  }
+
+  /**
+   * The parent entities card only pushes `hass` down when IT updates, and it decides that from the
+   * entities in its own config - the row's `entity`. This row also depends on heating_master,
+   * ac_master and offset_entity, which the card knows nothing about. Because hass objects are
+   * immutable snapshots, a change to one of those left this element holding a STALE snapshot and
+   * painting a stale colour, while the template-entity-row beside it (which uses HA's render_template
+   * subscription) stayed correct. That is the "orange icon, grey slider" mismatch. So subscribe to
+   * state_changed directly and keep our own freshest copy of every entity we care about.
+   */
+  _deps() {
+    return [this._config.entity, this._config.heating_master,
+            this._config.ac_master, this._config.offset_entity].filter(Boolean);
+  }
+  _st(entityId) {
+    if (!entityId) return undefined;
+    return (this._live && this._live[entityId]) ||
+           (this._hass && this._hass.states ? this._hass.states[entityId] : undefined);
+  }
+  _subscribe() {
+    if (this._subPending || this._unsub) return;
+    if (!this._hass || !this._hass.connection) return;
+    this._subPending = true;
+    this._live = this._live || {};
+    this._hass.connection.subscribeEvents((ev) => {
+      const ns = ev && ev.data && ev.data.new_state;
+      if (!ns || !ns.entity_id) return;
+      if (this._deps().indexOf(ns.entity_id) === -1) return;
+      this._live[ns.entity_id] = ns;
+      this._paint();
+      if (this._backdrop && !this._backdrop.hidden && !this._popDrag) {
+        this._popValue = this._offsetValue; this._paintPop();
+      }
+    }, "state_changed").then((u) => { this._unsub = u; this._subPending = false; })
+      .catch(() => { this._subPending = false; });
   }
 
   // ---------- entity helpers ----------
   get _stateObj() {
-    return this._hass && this._config ? this._hass.states[this._config.entity] : undefined;
+    return this._config ? this._st(this._config.entity) : undefined;
   }
   get _domain() { return this._config.entity.split(".")[0]; }
 
@@ -202,8 +239,8 @@ class TempSliderRow extends HTMLElement {
     const s = this._stateObj;
     if (!s) return DIS;
     const prof = this._profile();
-    const acS   = this._config.ac_master ? this._hass.states[this._config.ac_master] : null;
-    const heatS = this._config.heating_master ? this._hass.states[this._config.heating_master] : null;
+    const acS   = this._config.ac_master ? this._st(this._config.ac_master) : null;
+    const heatS = this._config.heating_master ? this._st(this._config.heating_master) : null;
 
     // colour of a climate entity: what it is DOING, falling back to what it is SET to
     const climColor = (st) => {
@@ -256,12 +293,12 @@ class TempSliderRow extends HTMLElement {
 
   // ---------- offset popup ----------
   get _offsetValue() {
-    const o = this._hass && this._hass.states[this._config.offset_entity];
+    const o = this._st(this._config.offset_entity);
     const v = o ? parseFloat(o.state) : NaN;
     return isFinite(v) ? v : 0;
   }
   _popBounds() {
-    const o = this._hass && this._hass.states[this._config.offset_entity];
+    const o = this._st(this._config.offset_entity);
     const a = (o && o.attributes) || {};
     return { min: Number(a.min !== undefined ? a.min : -5),
              max: Number(a.max !== undefined ? a.max : 5),
@@ -290,7 +327,11 @@ class TempSliderRow extends HTMLElement {
     this._popDrag = false;
     if (this._escHandler) document.removeEventListener("keydown", this._escHandler);
   }
-  disconnectedCallback() { this._closePop(); }
+  disconnectedCallback() {
+    this._closePop();
+    if (this._unsub) { try { this._unsub(); } catch (_) {} this._unsub = null; }
+  }
+  connectedCallback() { this._subscribe(); }
   _paintPop() {
     const { min, max, step } = this._popBounds();
     const v = this._popValue === undefined ? this._offsetValue : this._popValue;
@@ -577,7 +618,7 @@ class TempSliderRow extends HTMLElement {
     // offset superscript: shown only when non-zero, so untouched rooms look exactly as before
     this._label.classList.toggle("tappable", !!this._config.offset_entity);
     if (this._config.offset_entity) {
-      const os = this._hass && this._hass.states[this._config.offset_entity];
+      const os = this._st(this._config.offset_entity);
       const ov = os ? parseFloat(os.state) : NaN;
       if (isFinite(ov) && Math.abs(ov) >= 0.05) {
         const sup = document.createElement("sup");
